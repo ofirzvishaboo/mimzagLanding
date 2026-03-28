@@ -1,0 +1,35 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+
+# Environment & secrets
+.env
+.env.*
+
+# Version control
+.git/
+.gitignore
+
+# Editor
+.cursor/
+.vscode/
+*.swp
+*.swo
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Nginx config
+nginx/
+
+# OS
+.DS_Store
+Thumbs.db

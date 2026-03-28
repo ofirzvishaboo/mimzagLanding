@@ -1,0 +1,51 @@
+services:
+
+  # ── FastAPI application ───────────────────────────────────────────────────
+  app:
+    build: .
+    container_name: mimzag_app
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "8000"
+    volumes:
+      # Mount static so nginx can serve files directly
+      - ./static:/app/static:ro
+    networks:
+      - internal
+
+  # ── Nginx reverse proxy (HTTP + HTTPS) ───────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: mimzag_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/mimzag.conf:/etc/nginx/conf.d/mimzag.conf:ro
+      - ./static:/app/static:ro
+      - certbot_conf:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - app
+    networks:
+      - internal
+
+  # ── Certbot — SSL certificate issuance & renewal ─────────────────────────
+  certbot:
+    image: certbot/certbot
+    container_name: mimzag_certbot
+    volumes:
+      - certbot_conf:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    # Default command does nothing; run manually or via cron (see README)
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done"
+
+volumes:
+  certbot_conf:
+  certbot_www:
+
+networks:
+  internal:
+    driver: bridge
