@@ -8,7 +8,10 @@
 
 ---
 
-## First-Time Setup
+## Setup (shares Caddy with the existing server project)
+
+HTTPS is handled automatically by the **existing Caddy instance** on the server —
+no Nginx, no Certbot needed for this project.
 
 ### 1. Copy project to server
 
@@ -18,59 +21,57 @@ ssh user@your-server-ip
 cd /opt/mimzag
 ```
 
-### 2. Create `.env` on the server
+### 2. Create the shared Docker network (once, if it doesn't exist yet)
 
 ```bash
-cat > .env << 'EOF'
+docker network create caddy_net
+```
+
+> If the other project already created `caddy_net`, this command will fail with
+> "already exists" — that's fine, skip it.
+
+### 3. Make sure the existing Caddy container is on `caddy_net`
+
+In the **other project's** `docker-compose.yml`, the Caddy service must have:
+
+```yaml
+networks:
+  - caddy_net
+
+networks:
+  caddy_net:
+    external: true
+```
+
+Then reload it: `docker compose up -d caddy`
+
+### 4. Update the Caddyfile on the server
+
+Copy the updated `Caddyfile` from this repo (it already includes the `mimzag.com` block)
+to the other project's directory, then reload Caddy:
+
+```bash
+docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+### 5. Create `.env` on the server
+
+```bash
+cat > /opt/mimzag/.env << 'EOF'
 GMAIL_USER=mimzag1@gmail.com
 GMAIL_APP_PASSWORD=your-16-char-app-password
 EOF
 ```
 
-### 3. Start Nginx on HTTP only (needed for Certbot challenge)
+### 6. Start the app
 
 ```bash
-docker compose up -d nginx
+cd /opt/mimzag
+docker compose up -d --build
 ```
 
-### 4. Issue the SSL certificate (one-time)
-
-```bash
-docker compose run --rm certbot certonly \
-  --webroot -w /var/www/certbot \
-  -d mimzag.com -d www.mimzag.com \
-  --email mimzag1@gmail.com \
-  --agree-tos --no-eff-email
-```
-
-### 5. Download recommended SSL options from Let's Encrypt
-
-```bash
-docker compose exec nginx sh -c "\
-  curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf \
-  > /etc/letsencrypt/options-ssl-nginx.conf && \
-  curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem \
-  > /etc/letsencrypt/ssl-dhparams.pem"
-```
-
-### 6. Start everything
-
-```bash
-docker compose up -d
-```
-
-Visit **https://mimzag.com** — HTTPS with a valid certificate.
-
----
-
-## Auto-renewal
-
-The `certbot` container already runs `certbot renew` every 12 hours automatically.  
-Reload nginx after renewal by adding this to the server's crontab (`crontab -e`):
-
-```cron
-0 3 * * * docker compose -f /opt/mimzag/docker-compose.yml exec nginx nginx -s reload
-```
+Point `mimzag.com` DNS A record → server IP.
+Caddy will automatically issue and renew the Let's Encrypt certificate.
 
 ---
 
